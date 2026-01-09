@@ -1,10 +1,14 @@
 import os
 import json
-import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, session
 from dotenv import load_dotenv
 from openai import OpenAI
 from datetime import date, datetime
+from db_helper import (
+    create_user, authenticate_user, get_user_stats, get_user_chats,
+    save_chat, check_domain_usage, mark_domain_used, 
+    update_user_xp_streak, get_user_last_visit
+)
 
 # ----------------------------
 # APP SETUP
@@ -21,44 +25,8 @@ print("API KEY LOADED:", "YES" if API_KEY else "NO")
 
 client = OpenAI(api_key=API_KEY)
 
-# ----------------------------
-# DATABASE INIT
-# ----------------------------
-def init_db():
-    conn = sqlite3.connect("iotgpt.db")
-    c = conn.cursor()
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS users(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        xp INTEGER DEFAULT 0,
-        streak INTEGER DEFAULT 0,
-        last_visit TEXT
-    )
-    """)
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS chats(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        project TEXT
-    )
-    """)
-
-    c.execute("""
-    CREATE TABLE IF NOT EXISTS domains_used(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        domain TEXT
-    )
-    """)
-
-    conn.commit()
-    conn.close()
-
-init_db()
+# Database initialization is handled by Supabase migration
+# No need for init_db() function
 
 # ----------------------------
 # AI FUNCTION — PROJECT DESIGN
@@ -211,44 +179,39 @@ def detect_domains(components):
 # XP + STREAK
 # ----------------------------
 def update_xp_and_streak(user_id, domains):
-    conn = sqlite3.connect("iotgpt.db")
-    c = conn.cursor()
+    # Get current stats
+    xp, streak = get_user_stats(user_id)
+    last_visit = get_user_last_visit(user_id)
 
-    c.execute("SELECT xp, streak, last_visit FROM users WHERE id=?", (user_id,))
-    xp, streak, last_visit = c.fetchone()
-
-    today = date.today().isoformat()
-
+    # Calculate streak
     if last_visit:
-        last = datetime.fromisoformat(last_visit).date()
-        if (date.today() - last).days == 1:
-            streak += 1
-        elif (date.today() - last).days > 1:
+        try:
+            last = datetime.fromisoformat(last_visit).date()
+            if (date.today() - last).days == 1:
+                streak += 1
+            elif (date.today() - last).days > 1:
+                streak = 1
+        except:
             streak = 1
     else:
         streak = 1
 
+    # Calculate XP gained
     gained_xp = 0
 
     for d in domains:
-        c.execute("SELECT 1 FROM domains_used WHERE user_id=? AND domain=?", (user_id,d))
-        if c.fetchone():
+        if check_domain_usage(user_id, d):
             gained_xp += 5
         else:
             gained_xp += 30
-            c.execute("INSERT INTO domains_used(user_id,domain) VALUES(?,?)",(user_id,d))
+            mark_domain_used(user_id, d)
 
     if "cloud" in domains: gained_xp += 30
     if "display" in domains: gained_xp += 20
     if "actuator" in domains: gained_xp += 20
 
-    xp += gained_xp
-
-    c.execute("UPDATE users SET xp=?, streak=?, last_visit=? WHERE id=?",
-              (xp, streak, today, user_id))
-
-    conn.commit()
-    conn.close()
+    # Update user stats
+    xp, streak = update_user_xp_streak(user_id, gained_xp, streak)
 
     return xp, streak, gained_xp
 
@@ -260,14 +223,10 @@ def signup():
     if request.method=="POST":
         u=request.form["username"]
         p=request.form["password"]
-        try:
-            conn=sqlite3.connect("iotgpt.db")
-            c=conn.cursor()
-            c.execute("INSERT INTO users(username,password) VALUES(?,?)",(u,p))
-            conn.commit()
-            conn.close()
+        user_id = create_user(u, p)
+        if user_id:
             return redirect(url_for("login"))
-        except:
+        else:
             return render_template("signup.html",error="Username exists")
     return render_template("signup.html")
 
@@ -276,13 +235,9 @@ def login():
     if request.method=="POST":
         u=request.form["username"]
         p=request.form["password"]
-        conn=sqlite3.connect("iotgpt.db")
-        c=conn.cursor()
-        c.execute("SELECT id FROM users WHERE username=? AND password=?",(u,p))
-        user=c.fetchone()
-        conn.close()
-        if user:
-            session["user_id"]=user[0]
+        user_id = authenticate_user(u, p)
+        if user_id:
+            session["user_id"]=user_id
             session["username"]=u
             return redirect(url_for("home"))
         else:
@@ -308,13 +263,9 @@ def home():
     sim_link=None
     wokwi_json=None
 
-    conn=sqlite3.connect("iotgpt.db")
-    c=conn.cursor()
-    c.execute("SELECT id,project FROM chats WHERE user_id=?",(session["user_id"],))
-    chats=c.fetchall()
-    c.execute("SELECT xp,streak FROM users WHERE id=?",(session["user_id"],))
-    xp,streak=c.fetchone()
-    conn.close()
+    # Get user stats and chat history from Supabase
+    chats = get_user_chats(session["user_id"])
+    xp, streak = get_user_stats(session["user_id"])
 
     if request.method=="POST":
         project=request.form.get("project")
@@ -330,11 +281,8 @@ def home():
                 data["components"]
             )
 
-            conn=sqlite3.connect("iotgpt.db")
-            c=conn.cursor()
-            c.execute("INSERT INTO chats(user_id,project) VALUES(?,?)",(session["user_id"],project))
-            conn.commit()
-            conn.close()
+            # Save chat to Supabase
+            save_chat(session["user_id"], project)
 
         except Exception as e:
             print("AI ERROR:",e)
