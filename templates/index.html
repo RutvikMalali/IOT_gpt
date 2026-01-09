@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>IoT GPT</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+
+<!-- MERMAID -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({ startOnLoad: false, theme: "default" });
+</script>
+
+<style>
+*{box-sizing:border-box;font-family:'Poppins',sans-serif;}
+
+body{
+  margin:0;
+  min-height:100vh;
+  background:linear-gradient(135deg,#0a1a3a,#0f2a5f);
+  color:white;
+}
+
+.toggle-btn{
+  position:fixed;top:15px;left:15px;z-index:3000;
+  background:#1da1ff;border:none;color:white;
+  padding:8px 12px;border-radius:6px;cursor:pointer;
+}
+
+.app-wrapper{display:flex;height:100vh;}
+
+.sidebar{
+  width:260px;background:#07162f;padding:20px;
+  overflow-y:auto;transition:.3s;z-index:2000;
+  position:fixed;top:0;left:0;height:100%;
+}
+
+.sidebar.hidden{transform:translateX(-100%);}
+
+.sidebar h3{color:#8fd3ff;margin-top:0;}
+
+.chat-item{
+  display:block;padding:10px;margin-bottom:8px;
+  background:rgba(255,255,255,.05);
+  border-radius:6px;color:white;text-decoration:none;font-size:14px;
+}
+.chat-item:hover{background:rgba(29,161,255,.3);}
+
+.main-content{
+  flex:1;
+  margin-left:260px;
+  display:flex;justify-content:center;align-items:flex-start;
+  padding:20px;overflow-y:auto;transition:.3s;
+}
+
+.main-content.full{margin-left:0;}
+
+.container{
+  background:rgba(255,255,255,.06);backdrop-filter:blur(12px);
+  border-radius:16px;padding:30px 35px;width:100%;max-width:900px;
+  box-shadow:0 0 25px rgba(0,0,0,.45);
+}
+
+h1{text-align:center;margin-bottom:4px;}
+.subtitle{text-align:center;font-size:14px;opacity:.85;margin-bottom:10px;}
+.top-bar{text-align:right;font-size:13px;margin-bottom:10px;}
+.top-bar a{color:#8fd3ff;text-decoration:none;}
+
+.xp-box{text-align:center;margin-bottom:10px;color:#8fd3ff;font-size:13px;}
+
+form{display:flex;gap:10px;margin-bottom:25px;}
+input[type=text]{flex:1;padding:12px 14px;border-radius:8px;border:none;font-size:14px;}
+button{background:#1da1ff;border:none;border-radius:8px;padding:12px 18px;color:white;font-weight:600;}
+button:hover{background:#0d8ce0;}
+
+.output-card{
+  background:rgba(0,0,0,.35);border-radius:12px;
+  padding:18px;margin-bottom:15px;
+}
+.output-card h3{margin-top:0;color:#8fd3ff;}
+
+.mermaid{background:white;border-radius:10px;padding:10px;color:black;overflow-x:auto;}
+
+pre{
+  background:#0b0b0b;color:#00ff99;padding:15px;border-radius:10px;
+  overflow-x:auto;font-size:13px;
+}
+
+.sim-link{
+  display:inline-block;
+  margin-top:6px;
+  color:#1da1ff;
+  text-decoration:none;
+  font-weight:600;
+}
+
+.copy-btn{
+  background:#00c896;
+  border:none;
+  color:black;
+  padding:5px 10px;
+  border-radius:6px;
+  font-size:12px;
+  cursor:pointer;
+  float:right;
+}
+
+.copy-btn:hover{background:#00a87a;}
+
+footer{text-align:center;margin-top:15px;font-size:12px;opacity:.7;}
+
+@media(max-width:800px){
+  .main-content{margin-left:0;}
+}
+</style>
+</head>
+
+<body>
+
+<button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+
+<div class="app-wrapper">
+
+<div class="sidebar hidden" id="sidebar">
+  <h3>Your Chats</h3>
+  {% for chat in chats %}
+    <a class="chat-item" href="/chat/{{ chat[0] }}">{{ chat[1] }}</a>
+  {% endfor %}
+</div>
+
+<div class="main-content full" id="main">
+
+<div class="container">
+
+<div class="top-bar">
+  Hi {{ username }} |
+  🔥 Streak: {{ streak }} days |
+  ⭐ XP: {{ xp }} |
+  <a href="/logout">Logout</a>
+</div>
+
+{% if gained %}
+<div class="xp-box">🎉 You earned +{{ gained }} XP!</div>
+{% endif %}
+
+<h1>IoT GPT</h1>
+<div class="subtitle">AI-based IoT Project Assistant</div>
+
+<form method="POST">
+  <input type="text" name="project" placeholder="Enter IoT project idea..." required>
+  <button type="submit">Generate</button>
+</form>
+
+{% if introduction %}
+<div class="output-card"><h3>Project Overview</h3><p>{{ introduction }}</p></div>
+{% endif %}
+
+{% if microcontroller %}
+<div class="output-card"><h3>Microcontroller</h3><p>{{ microcontroller }}</p></div>
+{% endif %}
+
+{% if components %}
+<div class="output-card"><h3>Components</h3>
+<ul>{% for c in components %}<li>{{ c }}</li>{% endfor %}</ul></div>
+{% endif %}
+
+{% if pin_config %}
+<div class="output-card"><h3>Pin Configuration</h3>
+<ul>{% for p in pin_config %}<li>{{ p }}</li>{% endfor %}</ul></div>
+{% endif %}
+
+{% if algorithm %}
+<div class="output-card"><h3>Algorithm</h3>
+<ol>{% for step in algorithm %}<li>{{ step }}</li>{% endfor %}</ol></div>
+{% endif %}
+
+{% if flowchart %}
+<div class="output-card"><h3>Flowchart</h3>
+<div class="mermaid">{{ flowchart }}</div></div>
+{% endif %}
+
+{% if arduino_code %}
+<div class="output-card">
+  <h3>
+    Arduino Code
+    <button class="copy-btn" onclick="copyText('arduinoCode')">Copy</button>
+  </h3>
+  <pre id="arduinoCode"><code>{{ arduino_code }}</code></pre>
+</div>
+{% endif %}
+
+<!-- ✅ WOKWI JSON + LINK -->
+{% if wokwi_json %}
+<div class="output-card">
+  <h3>
+    Wokwi diagram.json
+    <button class="copy-btn" onclick="copyText('wokwiJson')">Copy</button>
+  </h3>
+
+  <pre id="wokwiJson"><code>{{ wokwi_json }}</code></pre>
+
+  {% if sim_link %}
+  <a class="sim-link" href="{{ sim_link }}" target="_blank">
+    ▶ Open in Wokwi Simulator
+  </a>
+  {% endif %}
+
+  <p style="font-size:12px;opacity:.8;">
+    Wokwi → New Project → diagram.json → Paste → Run
+  </p>
+</div>
+{% endif %}
+
+<footer>Built for Eduthon Hackathon • Team Project</footer>
+
+</div>
+</div>
+</div>
+
+<script>
+function toggleSidebar(){
+  document.getElementById("sidebar").classList.toggle("hidden");
+  document.getElementById("main").classList.toggle("full");
+}
+
+function copyText(id){
+  const text = document.getElementById(id).innerText;
+  navigator.clipboard.writeText(text);
+  alert("Copied to clipboard ✅");
+}
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded",()=>{
+  if(window.mermaid){ mermaid.run(); }
+});
+</script>
+
+</body>
+</html>

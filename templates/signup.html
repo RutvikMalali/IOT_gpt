@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Signup - IoT GPT</title>
+</head>
+<body style="background:#0a1a3a;color:white;text-align:center;padding-top:100px;">
+
+<h2>Create Account</h2>
+
+<form method="POST">
+    <input name="username" placeholder="Username" required><br><br>
+    <input type="password" name="password" placeholder="Password" required><br><br>
+    <button>Create Account</button>
+</form>
+
+<p style="color:red;">{{ error }}</p>
+
+<p>Already have account? <a href="/login" style="color:#1da1ff;">Login</a></p>
+
+</body>
+</html>
